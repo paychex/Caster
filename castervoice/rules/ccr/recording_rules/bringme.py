@@ -23,6 +23,92 @@ from castervoice.lib.ctrl.mgr.rule_details import RuleDetails
 from castervoice.lib.merge.selfmod.selfmodrule import BaseSelfModifyingRule
 from castervoice.lib.merge.state.short import R
 
+def get_selected_files(folders=False):
+    '''
+    Copy selected (text or file is subsequently of interest) to a fresh clipboard
+    '''
+    if utilities.is_windows() or utilities.is_linux():
+        cb = Clipboard(from_system=True)
+        cb.clear_clipboard()
+        Key("c-c").execute()
+        time.sleep(0.1)
+        files = get_clipboard_files(folders)
+        cb.copy_to_system()
+        return files
+    else:
+        printer.out("get_selected_files: Not implemented for OS")
+
+
+def enum_files_from_clipboard(target):
+    '''
+    Generates absolute paths from clipboard 
+    Returns unverified absolute file/dir paths based on defined mime type
+    '''
+    paths = []
+    if utilities.is_linux():
+        encoding = getpreferredencoding()
+        com = ["xclip", "-selection", "clipboard", "-o", target]
+        try:
+            p = subprocess.Popen(com,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 stdin=subprocess.PIPE,
+                                 )
+            for line in iter(p.stdout.readline, b''):
+                if isinstance(line, binary_type):
+                    line = line.decode(encoding).strip()
+                if line.startswith("file://"):
+                    line = line.replace("file://", "")
+                paths.append(unquote(line))
+            return paths
+        except Exception as e:
+            print(
+                "Exception from starting subprocess {0}: " "{1}".format(com, e))
+
+
+def get_clipboard_files(folders=False):
+    '''
+    Enumerate clipboard content and return files/folders either directly copied or
+    highlighted path copied
+    '''
+    files = None
+    if utilities.is_windows():
+        import win32clipboard  # pylint: disable=import-error
+        win32clipboard.OpenClipboard()
+        f = get_clipboard_formats()
+        if win32clipboard.CF_HDROP in f:
+            files = win32clipboard.GetClipboardData(win32clipboard.CF_HDROP)
+        elif win32clipboard.CF_UNICODETEXT in f:
+            files = [win32clipboard.GetClipboardData(
+                win32clipboard.CF_UNICODETEXT)]
+        elif win32clipboard.CF_TEXT in f:
+            files = [win32clipboard.GetClipboardData(win32clipboard.CF_TEXT)]
+        elif win32clipboard.CF_OEMTEXT in f:
+            files = [win32clipboard.GetClipboardData(
+                win32clipboard.CF_OEMTEXT)]
+        if folders:
+            files = [f for f in files if os.path.isdir(f)] if files else None
+        else:
+            files = [f for f in files if os.path.isfile(f)] if files else None
+        win32clipboard.CloseClipboard()
+        return files
+
+    if utilities.is_linux():
+        f = get_clipboard_formats()
+        if "UTF8_STRING" in f:
+            files = enum_files_from_clipboard("UTF8_STRING")
+        elif "TEXT" in f:
+            files = enum_files_from_clipboard("TEXT")
+        elif "text/plain" in f:
+            files = enum_files_from_clipboard("text/plain")
+        if folders:
+            files = [f for f in files if os.path.isdir(
+                str(f))] if files else None
+        else:
+            files = [f for f in files if os.path.isfile(
+                str(f))] if files else None
+        return files
+
 
 class BringRule(BaseSelfModifyingRule):
     """
@@ -122,10 +208,10 @@ class BringRule(BaseSelfModifyingRule):
                 # dragonfly.get_current_engine().speak("program not detected")
                 printer.out("Program path for bring me not found ")
         elif launch_type == 'file':
-            files = utilities.get_selected_files(folders=False)
+            files = get_selected_files(folders=False)
             path = files[0] if files else None # or allow adding multiple files
         elif launch_type == 'folder':
-            files = utilities.get_selected_files(folders=True)
+            files = get_selected_files(folders=True)
             path = files[0] if files else None # or allow adding multiple folders
         else:
             Key("a-d/5").execute()

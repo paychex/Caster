@@ -3,9 +3,11 @@ import unittest
 from castervoice.lib.clipboard import Clipboard
 from dragonfly import Clipboard as DragonflyClipboard
 
-class TestExtendedClipboard(unittest.TestCase):
+from tests.test_util.settings_mocking import SettingsEnabledTestCase
+
+class TestExtendedClipboard(SettingsEnabledTestCase):
     def setUp(self):
-        self.clipboard = Clipboard(file=None)
+        self.clipboard = Clipboard()
     
     def test_copy_to_from_system(self):
         pass
@@ -45,7 +47,7 @@ class TestExtendedClipboard(unittest.TestCase):
         self.clipboard.clear_text(2)
         self.clipboard.clear_text("my_key")
 
-        # TODO fix bug in dragonfly
+        # TODO uncomment with next version of dragonfly (https://github.com/dictation-toolbox/dragonfly/pull/319)
         # self.assertEqual(self.clipboard.has_text(), False)
         self.assertEqual(self.clipboard.has_text(2), False)
         self.assertEqual(self.clipboard.has_text("my_key"), False)

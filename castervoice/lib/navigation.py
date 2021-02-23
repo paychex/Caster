@@ -10,19 +10,7 @@ from castervoice.lib import control, settings, utilities, textformat
 from castervoice.lib.actions import Key, Text, Mouse
 from castervoice.lib.clipboard import Clipboard
 
-_CLIP = {}
-GRID_PROCESS = None
-
-
-def initialize_clipboard():
-    global _CLIP
-    if len(_CLIP) == 0:
-        _CLIP = utilities.load_json_file(
-            settings.settings(["paths", "SAVED_CLIPBOARD_PATH"]))
-
-
-initialize_clipboard()
-
+GRID_PROCESS = none
 
 def mouse_alternates(mode, monitor=1, rough=True):
     args = []
@@ -97,16 +85,13 @@ def _text_to_clipboard(keystroke, nnavi500):
         cb = Clipboard(from_system=True)
         Key(keystroke).execute()
         key = str(nnavi500)
-        global _CLIP
         for i in range(0, max_tries):
             failure = False
             try:
                 # time for keypress to execute
                 time.sleep(
                     settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
-                _CLIP[key] = Clipboard.get_system_text()
-                utilities.save_json_file(
-                    _CLIP, settings.settings([u'paths', u'SAVED_CLIPBOARD_PATH']))
+                cb.set_text(Clipboard.get_system_text())
             except Exception:
                 failure = True
                 utilities.simple_log()
@@ -130,9 +115,10 @@ def drop_keep_clipboard(nnavi500, capitalization, spacing):
         return
     # Get clipboard text
     if nnavi500 > 1:
+        cb = Clipboard(from_system=False)
         key = str(nnavi500)
-        if key in _CLIP:
-            text = _CLIP[key]
+        if cb.has_text(key):
+            text = cb.get_text(key)
         else:
             get_current_engine().speak("slot empty")
             text = None
@@ -163,10 +149,8 @@ def duple_keep_clipboard(nnavi50):
 
 
 def erase_multi_clipboard():
-    global _CLIP
-    _CLIP = {}
-    utilities.save_json_file(_CLIP,
-                             settings.settings([u'paths', u'SAVED_CLIPBOARD_PATH']))
+    cb = Clipboard(from_system=False)
+    sb.clear_all_text()
 
 
 def kill_grids_and_wait():

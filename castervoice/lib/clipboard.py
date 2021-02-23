@@ -1,7 +1,7 @@
 import re
 
 from dragonfly import Clipboard as DragonflyClipboard
-from castervoice.lib import printer, settings
+from castervoice.lib import printer, utilities, settings
 
 def _is_aenea_available():
     try:
@@ -12,15 +12,12 @@ def _is_aenea_available():
         return False
 
 """
-Extended clipboard that allows using multiple indexes
+Extended clipboard that allows using multiple indexes. Class is not thread safe.
 """
 class ExtendedClipboard(DragonflyClipboard):
     SAVED_CLIPBOARD_PATH = settings.settings([u'paths', u'SAVED_CLIPBOARD_PATH'])
 
-    # TODO fix circular import
-    #from castervoice.lib import utilities
-    #utilities.load_json_file(settings.settings(["paths", "SAVED_CLIPBOARD_PATH"]))
-    _clip = {}
+    _clip = utilities.load_json_file(SAVED_CLIPBOARD_PATH)
 
     def __init__(self, contents=None, text=None, from_system=False):
         super(ExtendedClipboard, self).__init__(contents=contents, text=text, from_system=from_system)
@@ -57,13 +54,8 @@ class ExtendedClipboard(DragonflyClipboard):
             DragonflyClipboard.set_system_text(content)
 
     @classmethod
-    def save_clipboard(cls): 
-        # TODO fix circular import
-        #from castervoice.lib import utilities
-        #utilities.save_json_file(_CLIP, settings.settings([u'paths', u'SAVED_CLIPBOARD_PATH']))
-        print("SAVE CLIP")
-        print(clip)
-        pass
+    def _save_clipboard(cls):
+        utilities.save_json_file(cls._clip, cls.SAVED_CLIPBOARD_PATH)
 
     def copy_from_system(self, clear=False, index=1):
         key = self._key(index)
@@ -89,14 +81,14 @@ class ExtendedClipboard(DragonflyClipboard):
         if key == "1":
             return super(ExtendedClipboard, self).has_text()
         else:
-            return key in _clip and _clip[key] is not None
+            return key in self._clip and self._clip[key] is not None
 
     def get_text(self, index=1):
         key = self._key(index)
         if key == "1":
             return super(ExtendedClipboard, self).get_text()
         else:
-            return _clip.get(key)
+            return self._clip.get(key)
 
     def set_text(self, content, index=1):
         key = self._key(index)
@@ -104,10 +96,10 @@ class ExtendedClipboard(DragonflyClipboard):
             super(ExtendedClipboard, self).set_text(content)
         else:
             if key is None:
-                _clip.pop(key, None)
+                self._clip.pop(key, None)
             else:
-                _clip[key] = content
-            self.save_clipboard()
+                self._clip[key] = content
+            self._save_clipboard()
 
     def clear_text(self, index=1):
         self.set_text(None, index)
@@ -115,8 +107,8 @@ class ExtendedClipboard(DragonflyClipboard):
     def clear_all_text(self):
         self.clear_text(1)
 
-        _clip = {}
-        self.save_clipboard()
+        self._clip = {}
+        self._save_clipboard()
 
     def _key(self, obj):
         key = str(obj)
