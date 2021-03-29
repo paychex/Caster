@@ -10,7 +10,17 @@ from castervoice.lib import control, settings, utilities, textformat
 from castervoice.lib.actions import Key, Text, Mouse
 from castervoice.lib.clipboard import Clipboard
 
-GRID_PROCESS = none
+GRID_PROCESS = None
+
+# Keep a single instance of a virtual clipboard to be more efficient
+_CLIP = Clipboard()
+
+def initialize_clipboard():
+    global _CLIP
+    _CLIP.load(settings.settings(["paths", "SAVED_CLIPBOARD_PATH"]))
+    _CLIP.copy_from_system()
+
+initialize_clipboard()
 
 def mouse_alternates(mode, monitor=1, rough=True):
     args = []
@@ -81,23 +91,31 @@ def _text_to_clipboard(keystroke, nnavi500):
     if nnavi500 == 1:
         Key(keystroke).execute()
     else:
+        global _CLIP
         max_tries = 20
-        cb = Clipboard(from_system=True)
-        Key(keystroke).execute()
-        key = str(nnavi500)
-        for i in range(0, max_tries):
-            failure = False
-            try:
-                # time for keypress to execute
-                time.sleep(
-                    settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
-                cb.set_text(Clipboard.get_system_text())
-            except Exception:
-                failure = True
-                utilities.simple_log()
-            if not failure:
-                break
-        cb.copy_to_system()
+
+        # Load the current system clipboard state into memory so it can be restored later since we temporarily use the system clipboard below
+        orig = Clipboard(from_system=True)
+        try:
+            Key(keystroke).execute()
+            key = str(nnavi500)
+            for i in range(0, max_tries):
+                failure = False
+                try:
+                    # time for keypress to execute
+                    time.sleep(
+                        settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
+                    
+                    _CLIP.copy_from_system(key)
+                    _CLIP.save(settings.settings(["paths", "SAVED_CLIPBOARD_PATH"]))
+                except Exception:
+                    failure = True
+                    utilities.simple_log()
+                if not failure:
+                    break
+        finally:
+            # Restore the system clipboard contents.
+            orig.copy_to_system()
 
 
 def stoosh_keep_clipboard(nnavi500):
@@ -113,44 +131,48 @@ def drop_keep_clipboard(nnavi500, capitalization, spacing):
     if capitalization == 0 and spacing == 0 and nnavi500 == 1:
         Key("c-v").execute()
         return
-    # Get clipboard text
-    if nnavi500 > 1:
-        cb = Clipboard(from_system=False)
-        key = str(nnavi500)
-        if cb.has_text(key):
-            text = cb.get_text(key)
-        else:
-            get_current_engine().speak("slot empty")
-            text = None
-    else:
-        text = Clipboard.get_system_text()
+
+    # Get clipboard text. Requires slot to have content to proceed.
+    global _CLIP
+    text = _CLIP.get_text(str(nnavi500))
+
     # Format if necessary, and paste
     if text is not None:
-        cb = Clipboard(from_system=True)
-        if capitalization != 0 or spacing != 0:
-            text = textformat.TextFormat.formatted_text(
-                capitalization, spacing, text)
-        Clipboard.set_system_text(text)
-        time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
-        Key("c-v").execute()
-        time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
-        # Restore the clipboard contents.
-        cb.copy_to_system()
+        # Load the current system clipboard state into memory so it can be restored later since we temporarily use the system clipboard below
+        orig = Clipboard(from_system=True)
+        try:
+            if capitalization != 0 or spacing != 0:
+                text = textformat.TextFormat.formatted_text(
+                    capitalization, spacing, text)
+            Clipboard.set_system_text(text)
+            time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
+            Key("c-v").execute()
+            time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
+        finally:
+            # Restore the system clipboard contents.
+            orig.copy_to_system()
+    else:
+        get_current_engine().speak("slot empty")
 
 
 def duple_keep_clipboard(nnavi50):
-    cb = Clipboard(from_system=True)
-    Key("escape, home, s-end, c-c, end").execute()
-    time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
-    for i in range(0, nnavi50):
-        Key("enter, c-v").execute()
+    # Load the current system clipboard state into memory so it can be restored later since we temporarily use the system clipboard below
+    orig = Clipboard(from_system=True)
+    try:
+        Key("escape, home, s-end, c-c, end").execute()
         time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
-    cb.copy_to_system()
+        for i in range(0, nnavi50):
+            Key("enter, c-v").execute()
+            time.sleep(settings.settings([u'miscellaneous', u'keypress_wait'])/1000.)
+    finally:
+        # Restore the system clipboard contents.
+        orig.copy_to_system()
 
 
 def erase_multi_clipboard():
-    cb = Clipboard(from_system=False)
-    sb.clear_all_text()
+    global _CLIP
+    _CLIP.clear_all_text()
+    _CLIP.save(settings.settings(["paths", "SAVED_CLIPBOARD_PATH"]))
 
 
 def kill_grids_and_wait():
